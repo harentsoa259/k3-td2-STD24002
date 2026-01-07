@@ -4,9 +4,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Team {
-    private final Integer id;
+    private final  Integer id;
     private final  String name;
-    private final  ContinentEnum continent;
+    private final ContinentEnum continent;
     private final List<Player> players = new ArrayList<>();
 
     public Team(Integer id, String name, ContinentEnum continent) {
@@ -15,24 +15,25 @@ public class Team {
         this.continent = continent;
     }
 
-    public void addPlayer(Player player) {
-        players.add(player);
-        player.setTeam(this);
-    }
-
     public Integer getId() { return id; }
     public String getName() { return name; }
     public ContinentEnum getContinent() { return continent; }
     public List<Player> getPlayers() { return players; }
 
-    public Integer getPlayersGoals() {
-        int sum = 0;
+    public void addPlayer(Player p) {
+        players.add(p);
+        p.setTeam(this);
+    }
+
+    public int getPlayersGoals() {
+        int total = 0;
         for (Player p : players) {
             if (p.getGoalNb() == null) {
-                throw new IllegalStateException("Le nombre de buts du joueur " + p.getName() + " est inconnu.");
+                throw new RuntimeException("Le nombre de buts d'un joueur est encore inconnu: " + p.getName());
             }
-            sum += p.getGoalNb();
+            total += p.getGoalNb();
         }
-        return sum;
+        return total;
     }
+
 }
