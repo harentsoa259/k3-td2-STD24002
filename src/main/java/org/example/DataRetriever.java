@@ -1,217 +1,87 @@
 package org.example;
-
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
 public class DataRetriever {
-
-    private final DBConnection db;
-
-    public DataRetriever(DBConnection db) {
-        this.db = db;
-    }
-
-    // ======================== FIND TEAM BY ID ========================
-    public Team findTeamById(Integer id) throws SQLException {
-        String sql = """
-            SELECT t.id tid, t.name tname, t.continent,
-                   p.id pid, p.name pname, p.age, p.position, p.goal_nb
-            FROM team t
-            LEFT JOIN player p ON t.id = p.id_team
-            WHERE t.id = ?
-        """;
-
-        Team team = null;
-        try (Connection c = db.getDBConnection();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-
-            ps.setInt(1, id);
-            ResultSet rs = ps.executeQuery();
-
-            while (rs.next()) {
-                if (team == null) {
-                    team = new Team(rs.getInt("tid"), rs.getString("tname"),
-                            ContinentEnum.valueOf(rs.getString("continent")));
-                }
-
-                if (rs.getObject("pid") != null) {
-                    Player p = new Player(
-                            rs.getInt("pid"),
-                            rs.getString("pname"),
-                            rs.getInt("age"),
-                            PlayerPositionEnum.valueOf(rs.getString("position")),
-                            team,
-                            (Integer) rs.getObject("goal_nb") // récupérer goal_nb
-                    );
-                    team.addPlayer(p);
-                }
+    Team findTeamById(Integer id) {
+        DBConnection dbConnection = new DBConnection();
+        Connection connection = dbConnection.getConnection();
+        try {
+            PreparedStatement preparedStatement = connection.prepareStatement(
+                    """
+                            select team.id, team.name, continent
+                            from team
+                            where team.id = ?""");
+            preparedStatement.setInt(1, id);
+            ResultSet resultSet = preparedStatement.executeQuery();
+            if (resultSet.next()) {
+                Team team = new Team();
+                Integer teamId = resultSet.getInt("id");
+                team.setId(teamId);
+                team.setName(resultSet.getString("name"));
+                team.setContinent(ContinentEnum.valueOf(resultSet.getString("continent")));
+                team.setPlayers(findPlayersByIdTeam(teamId));
+                dbConnection.close(connection);
+                return team;
             }
+            dbConnection.close(connection);
+            throw new RuntimeException("Not found team(id=" + id + ")");
+        } catch (SQLException e) {
+            dbConnection.close(connection);
+            throw new RuntimeException(e);
         }
-        return team;
     }
 
-    // ======================== FIND PLAYERS WITH PAGINATION ========================
-    public List<Player> findPlayers(int page, int size) throws SQLException {
-        int offset = (page - 1) * size;
-        String sql = """
-            SELECT p.*, t.id tid, t.name tname, t.continent
-            FROM player p
-            LEFT JOIN team t ON p.id_team = t.id
-            ORDER BY p.id
-            LIMIT ? OFFSET ?
-        """;
-
+    private List<Player> findPlayersByIdTeam(Integer idTeam) {
         List<Player> players = new ArrayList<>();
-        try (Connection c = db.getDBConnection();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-
-            ps.setInt(1, size);
-            ps.setInt(2, offset);
-            ResultSet rs = ps.executeQuery();
-
-            while (rs.next()) {
-                Team team = rs.getObject("tid") == null ? null :
-                        new Team(rs.getInt("tid"), rs.getString("tname"),
-                                ContinentEnum.valueOf(rs.getString("continent")));
-
-                Player p = new Player(rs.getInt("id"), rs.getString("name"), rs.getInt("age"),
-                        PlayerPositionEnum.valueOf(rs.getString("position")), team,
-                        (Integer) rs.getObject("goal_nb"));
-                players.add(p);
+        DBConnection dbConnection = new DBConnection();
+        Connection connection = dbConnection.getConnection();
+        try {
+            PreparedStatement preparedStatement = connection.prepareStatement(
+                    """
+                            select id, name, age, position, goal_nb from player where team_id = ?
+                            """);
+            preparedStatement.setInt(1, idTeam);
+            ResultSet resultSet = preparedStatement.executeQuery();
+            while (resultSet.next()) {
+                Player player = new Player();
+                player.setId(resultSet.getInt("id"));
+                player.setName(resultSet.getString("name"));
+                player.setAge(resultSet.getInt("age"));
+                player.setPosition(PlayerPositionEnum.valueOf(resultSet.getString("position")));
+                player.setGoalNb(resultSet.getObject("goal_nb") == null ? null : resultSet.getInt("goal_nb"));
+                players.add(player);
             }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
         }
+        dbConnection.close(connection);
         return players;
     }
 
-    // ======================== CREATE PLAYERS ========================
-    public List<Player> createPlayers(List<Player> players) throws SQLException {
-        String insert = "INSERT INTO player(name, age, position, id_team, goal_nb) VALUES (?,?,?,?,?)";
-        List<Player> created = new ArrayList<>();
-
-        try (Connection c = db.getDBConnection()) {
-            c.setAutoCommit(false);
-
-            for (Player p : players) {
-                try (PreparedStatement check = c.prepareStatement("SELECT COUNT(*) FROM player WHERE name = ?")) {
-                    check.setString(1, p.getName());
-                    ResultSet rs = check.executeQuery();
-                    if (rs.next() && rs.getInt(1) > 0) {
-                        throw new RuntimeException("Le joueur " + p.getName() + " existe déjà !");
-                    }
-                }
-
-                try (PreparedStatement ps = c.prepareStatement(insert, Statement.RETURN_GENERATED_KEYS)) {
-                    ps.setString(1, p.getName());
-                    ps.setInt(2, p.getAge());
-                    ps.setString(3, p.getPosition().name());
-                    if (p.getTeam() != null) {
-                        ps.setInt(4, p.getTeam().getId());
-                    } else {
-                        ps.setNull(4, Types.INTEGER);
-                    }
-                    if (p.getGoalNb() != null) {
-                        ps.setInt(5, p.getGoalNb());
-                    } else {
-                        ps.setNull(5, Types.INTEGER);
-                    }
-                    ps.executeUpdate();
-
-                    ResultSet keys = ps.getGeneratedKeys();
-                    if (keys.next()) {
-                        p = new Player(keys.getInt(1), p.getName(), p.getAge(), p.getPosition(), p.getTeam(), p.getGoalNb());
-                        created.add(p);
-                    }
-                }
-            }
-
-            c.commit();
-        }
-        return created;
+    List<Player> findPlayers(int page, int size) {
+        throw new RuntimeException("Not supported");
     }
 
-    // ======================== SAVE TEAM ========================
-    public void saveTeam(Team team) throws SQLException {
-        if (team.getId() == null) return;
-
-        try (Connection c = db.getDBConnection()) {
-            c.setAutoCommit(false);
-
-            // Détacher tous les joueurs existants
-            try (PreparedStatement ps = c.prepareStatement("UPDATE player SET id_team=NULL WHERE id_team=?")) {
-                ps.setInt(1, team.getId());
-                ps.executeUpdate();
-            }
-
-            try (PreparedStatement ps = c.prepareStatement("UPDATE player SET id_team=? WHERE id=?")) {
-                for (Player p : team.getPlayers()) {
-                    ps.setInt(1, team.getId());
-                    ps.setInt(2, p.getId());
-                    ps.executeUpdate();
-                }
-            }
-
-            c.commit();
-        }
+    List<Player> createPlayers(List<Player> newPlayers) {
+        throw new RuntimeException("Not supported");
     }
 
-    // ======================== FIND TEAMS BY PLAYER NAME ========================
-    public List<Team> findTeamsByPlayerName(String name) throws SQLException {
-        String sql = "SELECT DISTINCT t.* FROM team t JOIN player p ON t.id=p.id_team WHERE LOWER(p.name) LIKE ?";
-        List<Team> teams = new ArrayList<>();
-
-        try (Connection c = db.getDBConnection();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-
-            ps.setString(1, "%" + name.toLowerCase() + "%");
-            ResultSet rs = ps.executeQuery();
-            while (rs.next()) {
-                teams.add(new Team(rs.getInt("id"), rs.getString("name"),
-                        ContinentEnum.valueOf(rs.getString("continent"))));
-            }
-        }
-        return teams;
+    Team saveTeam(Team teamToSave) {
+        throw new RuntimeException("Not supported");
     }
 
-    // ======================== FIND PLAYERS BY CRITERIA ========================
-    public List<Player> findPlayersByCriteria(String playerName, PlayerPositionEnum position,
-                                              String teamName, ContinentEnum continent,
-                                              int page, int size) throws SQLException {
-        StringBuilder sql = new StringBuilder("""
-            SELECT p.*, t.id tid, t.name tname, t.continent
-            FROM player p
-            LEFT JOIN team t ON p.id_team=t.id
-            WHERE 1=1
-        """);
-        List<Object> params = new ArrayList<>();
+    List<Team> findTeamsByPlayerName(String playerName) {
+        throw new RuntimeException("Not supported");
+    }
 
-        if (playerName != null) { sql.append(" AND LOWER(p.name) LIKE ?"); params.add("%" + playerName.toLowerCase() + "%"); }
-        if (position != null) { sql.append(" AND p.position::text = ?"); params.add(position.name()); } // CAST ENUM -> text
-        if (teamName != null) { sql.append(" AND LOWER(t.name) LIKE ?"); params.add("%" + teamName.toLowerCase() + "%"); }
-        if (continent != null) { sql.append(" AND t.continent = ?"); params.add(continent.name()); }
-
-        sql.append(" ORDER BY p.id LIMIT ? OFFSET ?");
-        params.add(size);
-        params.add((page - 1) * size);
-
-        List<Player> players = new ArrayList<>();
-        try (Connection c = db.getDBConnection();
-             PreparedStatement ps = c.prepareStatement(sql.toString())) {
-
-            for (int i = 0; i < params.size(); i++) {
-                ps.setObject(i + 1, params.get(i));
-            }
-
-            ResultSet rs = ps.executeQuery();
-            while (rs.next()) {
-                Team team = rs.getObject("tid") == null ? null :
-                        new Team(rs.getInt("tid"), rs.getString("tname"),
-                                ContinentEnum.valueOf(rs.getString("continent")));
-                players.add(new Player(rs.getInt("id"), rs.getString("name"), rs.getInt("age"),
-                        PlayerPositionEnum.valueOf(rs.getString("position")), team,
-                        (Integer) rs.getObject("goal_nb")));
-            }
-        }
-        return players;
+    List<Player> findPlayersByCriteria(String playerName,
+                                       PlayerPositionEnum position, String teamName,
+                                       ContinentEnum continent, int page, int size) {
+        throw new RuntimeException("Not supported");
     }
 }

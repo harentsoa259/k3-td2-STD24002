@@ -1,21 +1,32 @@
 package org.example;
 
 import java.sql.Connection;
+import java.sql.Driver;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 
 public class DBConnection {
-    public String URL =  "jdbc:postgresql://localhost:5432/mini_football_db";
-    public String USER = "mini_football_db_manager";
-    public String PASSWORD = "123456";
 
-    public Connection getDBConnection() throws SQLException {
+
+    public Connection getConnection() {
+        String jdbcUrl = "jdbc:postgresql://localhost:5432/mini_football_db";
+        String username = "postgres";
+        String password = "123456";
+
         try {
-            return DriverManager.getConnection(URL, USER, PASSWORD);
+            return DriverManager.getConnection(jdbcUrl, username, password);
         } catch (SQLException e) {
-            System.err.println("Erreur de connexion : " + e.getMessage());
-            throw e;
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void close(Connection connection) {
+        if (connection != null) {
+            try {
+                connection.close();
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
         }
     }
 }
-
