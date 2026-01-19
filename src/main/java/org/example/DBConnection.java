@@ -8,9 +8,9 @@ public class DBConnection {
 
     public Connection getConnection() {
         try {
-            String jdbcURl ="jdbc:postgresql://localhost:5432/ingredient" ;
-            String user = "postgres";
-            String password = "harentsoa";
+            String jdbcURl ="jdbc:postgresql://localhost:5432/mini_dish_db" ;
+            String user = "mini_dish_db_manager";
+            String password = String.valueOf(123456);
             return DriverManager.getConnection(jdbcURl,user,password);
         } catch (SQLException e) {
             throw new RuntimeException(e);

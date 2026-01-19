@@ -1,21 +1,25 @@
 package org.example;
 
+import java.util.List;
+
 public class Main {
     public static void main(String[] args) {
-        // Log before changes
-        DataRetriever dataRetriever = new DataRetriever();
-        Dish dish = dataRetriever.findDishById(4
 
-        );
-        System.out.println(dish);
+        DataRetriever dr = new DataRetriever();
 
-        // Log after changes
-//        dish.setIngredients(List.of(new Ingredient(1), new Ingredient(2)));
-//        Dish newDish = dataRetriever.saveDish(dish);
-//        System.out.println(newDish);
+        Ingredient i1 = new Ingredient(null, "Tomate", 600.0, CategoryEnum.VEGETABLE);
+        Ingredient i2 = new Ingredient(null, "Laitue", 400.0, CategoryEnum.VEGETABLE);
+        Ingredient i3 = new Ingredient(null, "Poulet", 9000.0, CategoryEnum.ANIMAL);
 
-        // Ingredient creations
-        //List<Ingredient> createdIngredients = dataRetriever.createIngredients(List.of(new Ingredient(null, "Fromage", CategoryEnum.DAIRY, 1200.0)));
-        //System.out.println(createdIngredients);
+        dr.saveIngredient(i1);
+        dr.saveIngredient(i2);
+        dr.saveIngredient(i3);
+
+        Dish d1 = new Dish(null, "Salade fraîche", DishTypeEnum.STARTER, 0.0, List.of());
+        Dish d2 = new Dish(null, "Poulet grillé", DishTypeEnum.MAIN, 0.0, List.of());
+
+        dr.saveDish(d1);
+        dr.saveDish(d2);
+
     }
 }
