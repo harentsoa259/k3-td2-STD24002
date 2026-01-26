@@ -6,7 +6,7 @@ import java.util.List;
 
 public class DataRetriever {
     public Dish findDishById(Integer id) {
-        String sql = "SELECT id, name, dish_type, price FROM dish WHERE id = ?";
+            String sql = "SELECT id, name, dish_type, price FROM dish WHERE id = ?;";
 
         try (Connection conn = new DBConnection().getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -14,7 +14,7 @@ public class DataRetriever {
             ps.setInt(1, id);
 
             try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) return null;
+                if (!rs.next()) ;
 
                 Dish dish = new Dish();
                 dish.setId(rs.getInt("id"));
@@ -81,40 +81,40 @@ public class DataRetriever {
     }
 
     public void saveDish(Dish toSave) {
+        // On ne spécifie pas l'ID dans l'INSERT pour laisser le SERIAL agir
         String sql = """
-            INSERT INTO dish (id, name, dish_type, price)
-            VALUES (?, ?, ?::dish_type, ?)
-            ON CONFLICT (id) DO UPDATE
-            SET name = EXCLUDED.name,
-                dish_type = EXCLUDED.dish_type,
-                price = EXCLUDED.price
-            RETURNING id;
-        """;
+        INSERT INTO dish (name, dish_type, price)
+        VALUES (?, ?::dish_type, ?)
+        ON CONFLICT (id) DO UPDATE
+        SET name = EXCLUDED.name,
+            dish_type = EXCLUDED.dish_type,
+            price = EXCLUDED.price
+        RETURNING id;
+    """;
 
         try (Connection conn = new DBConnection().getConnection()) {
             conn.setAutoCommit(false);
 
-            Integer dishId;
             try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                // Si l'ID existe déjà (Update), on peut l'utiliser,
+                // sinon on laisse la DB décider (Insert)
+                ps.setString(1, toSave.getName());
+                ps.setString(2, toSave.getDishType().name());
+                ps.setObject(3, toSave.getPrice());
 
-                if (toSave.getId() != null) ps.setInt(1, toSave.getId());
-                else ps.setInt(1, getNextSerialValue(conn, "dish", "id"));
-
-                ps.setString(2, toSave.getName());
-                ps.setString(3, toSave.getDishType().name());
-                ps.setObject(4, toSave.getPrice());
-
-                ResultSet rs = ps.executeQuery();
-                rs.next();
-                dishId = rs.getInt(1);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        int generatedId = rs.getInt(1);
+                        toSave.setId(generatedId); // <--- L'ÉTAPE MANQUANTE : on met à jour l'objet !
+                    }
+                }
             }
 
-            deleteDishIngredients(conn, dishId);
-            insertDishIngredients(conn, dishId, toSave.getDishIngredients());
+            // Maintenant toSave.getId() n'est plus NULL
+            deleteDishIngredients(conn, toSave.getId());
+            insertDishIngredients(conn, toSave.getId(), toSave.getDishIngredients());
 
             conn.commit();
-            findDishById(dishId);
-
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
