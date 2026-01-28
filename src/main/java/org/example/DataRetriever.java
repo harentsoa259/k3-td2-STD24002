@@ -6,8 +6,6 @@ import java.util.List;
 
 public class DataRetriever {
 
-    // --- SECTION DISH ---
-
     public Dish findDishById(Integer id) {
         String sql = "SELECT id, name, dish_type, price FROM dish WHERE id = ?;";
 
@@ -94,8 +92,6 @@ public class DataRetriever {
         }
     }
 
-    // --- SECTION INGREDIENT ---
-
     public Ingredient findIngredientById(Integer id) {
         String sql = "SELECT id, name, price, category FROM ingredient WHERE id = ?";
 
@@ -112,7 +108,6 @@ public class DataRetriever {
                 ing.setPrice(rs.getDouble("price"));
                 ing.setCategory(CategoryEnum.valueOf(rs.getString("category")));
 
-                // Chargement des mouvements liés
                 ing.setStockMovementList(findStockMovementsByIngredientId(id));
                 return ing;
             }
@@ -124,18 +119,18 @@ public class DataRetriever {
     public Ingredient saveIngredient(Ingredient ingredient) {
         String sqlIngredient = """
             INSERT INTO ingredient (id, name, price, category)
-            VALUES (COALESCE(?, nextval(pg_get_serial_sequence('ingredient', 'id'))), ?, ?, ?::ingredient_category)
-            ON CONFLICT (id) DO UPDATE
-            SET name = EXCLUDED.name,
-                price = EXCLUDED.price,
-                category = EXCLUDED.category
-            RETURNING id;
+                    VALUES (?, ?, ?, ?::ingredient_category)
+                    ON CONFLICT (id) DO UPDATE\s
+                    SET name = EXCLUDED.name,
+                        price = EXCLUDED.price,
+                        category = EXCLUDED.category
+                    RETURNING id;
         """;
 
         try (Connection conn = new DBConnection().getConnection()) {
             conn.setAutoCommit(false);
             try (PreparedStatement ps = conn.prepareStatement(sqlIngredient)) {
-                ps.setObject(1, ingredient.getId()); // Utilise l'ID si présent, sinon le trigger/sequence
+                ps.setObject(1, ingredient.getId());
                 ps.setString(2, ingredient.getName());
                 ps.setDouble(3, ingredient.getPrice());
                 ps.setString(4, ingredient.getCategory().name());
