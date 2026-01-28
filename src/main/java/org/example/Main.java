@@ -1,56 +1,56 @@
 package org.example;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.time.Instant;
 
 public class Main {
     public static void main(String[] args) {
-        DataRetriever dr = new DataRetriever();
+        DataRetriever dataRetriever = new DataRetriever();
 
-        System.out.println("--- 1. Insertion des Ingrédients ---");
-        Ingredient tomate = new Ingredient(null, "Tomate", 600.0, CategoryEnum.VEGETABLE);
-        Ingredient laitue = new Ingredient(null, "Laitue", 400.0, CategoryEnum.VEGETABLE);
-        Ingredient poulet = new Ingredient(null, "Poulet", 9000.0, CategoryEnum.ANIMAL);
+        try {
+            System.out.println("=== OPÉRATIONS DE STOCK (MODE CONSTRUCTEUR) ===");
 
-        dr.saveIngredient(tomate);
-        dr.saveIngredient(laitue);
-        dr.saveIngredient(poulet);
-        System.out.println("Ingrédients sauvegardés avec succès.\n");
+            StockValue quantiteInitial = new StockValue(20.0, Unit.KG);
 
-        System.out.println("--- 2. Création et Liaison des Plats ---");
+            StockMovement premierMouvement = new StockMovement(
+                    null,
+                    quantiteInitial,
+                    MovementTypeEnum.IN,
+                    Instant.now()
+            );
 
-        Dish salade = new Dish(null, "Salade fraîche", DishTypeEnum.STARTER, 15000.0, new ArrayList<>());
-        dr.saveDish(salade);
+            Ingredient tomate = new Ingredient(null, "Tomate Cerise", 3.20, CategoryEnum.VEGETABLE);
 
-        DishIngredient di1 = new DishIngredient(salade.getId(), tomate.getId(), 0.25, "KG");
-        DishIngredient di2 = new DishIngredient(salade.getId(), laitue.getId(), 1.0, "PIECE");
+            tomate.getStockMovementList().add(premierMouvement);
 
-        salade.setDishIngredients(List.of(di1, di2));
-        dr.saveDish(salade);
+            // 3. Sauvegarde via DataRetriever
+            System.out.println("> Sauvegarde de l'ingrédient...");
+            Ingredient tomateSauvegardee = dataRetriever.saveIngredient(tomate);
 
-        Dish pouletGrille = new Dish(null, "Poulet grillé", DishTypeEnum.MAIN, 35000.0, new ArrayList<>());
-        dr.saveDish(pouletGrille);
+            StockMovement sortie = new StockMovement(
+                    null,
+                    new StockValue(5.0, Unit.KG),
+                    MovementTypeEnum.OUT,
+                    Instant.now()
+            );
 
-        DishIngredient di3 = new DishIngredient(pouletGrille.getId(), poulet.getId(), 0.5, "KG");
+            tomateSauvegardee.getStockMovementList().add(sortie);
+            dataRetriever.saveIngredient(tomateSauvegardee);
 
-        pouletGrille.setDishIngredients(List.of(di3));
-        dr.saveDish(pouletGrille);
-        System.out.println("Plats et compositions sauvegardés.\n");
+            Ingredient resultat = dataRetriever.findIngredientById(tomateSauvegardee.getId());
 
-        System.out.println("--- 3. Vérification des Calculs ---");
-        displayDishReport(dr, salade.getId());
-        displayDishReport(dr, pouletGrille.getId());
-    }
+            System.out.println("------------------------------------------");
+            System.out.println("Produit : " + resultat.getName());
+            System.out.println("Mouvements enregistrés : " + resultat.getStockMovementList().size());
 
-    private static void displayDishReport(DataRetriever dr, Integer dishId) {
-        Dish dish = dr.findDishById(dishId);
-        double cost = dr.getDishCost(dish);
-        double margin = dr.getGrossMargin(dish);
+            double total = 0;
+            for (StockMovement sm : resultat.getStockMovementList()) {
+                total += (sm.getType() == MovementTypeEnum.IN) ? sm.getValue().getQuantity() : -sm.getValue().getQuantity();
+            }
+            System.out.println("Stock final : " + total + " " + Unit.KG);
+            System.out.println("------------------------------------------");
 
-        System.out.println("Plat : " + dish.getName());
-        System.out.println("  > Prix de vente : " + dish.getPrice());
-        System.out.println("  > Coût de revient : " + cost);
-        System.out.println("  > Marge brute : " + margin);
-        System.out.println("------------------------------------");
+        } catch (Exception e) {
+            System.err.println("Erreur : " + e.getMessage());
+        }
     }
 }
